@@ -7,11 +7,34 @@ from langchain.prompts import (
 )
 from langchain.chains import LLMChain
 from langchain.memory import ConversationBufferMemory
+from langchain.document_loaders.directory import DirectoryLoader
+from langchain.document_loaders import (
+    PyPDFLoader,
+    CSVLoader,
+)
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
 from langchain.callbacks.manager import CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
+
+# For development
 callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
 
+# TODO: implement docs
+pdf_loader = DirectoryLoader('tinkoff-terms', glob='**/*.pdf', loader_cls=PyPDFLoader)
+csv_loader = DirectoryLoader('tinkoff-terms', glob='**/*.csv', loader_cls=CSVLoader)
+
+docs = pdf_loader.load() + csv_loader.load()
+
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000,
+    chunk_overlap=200
+)
+
+chunks = text_splitter.split_documents(docs)
+
+# TODO: Calibrate precision and randomization
 llm = LlamaCpp(
     model_path="llama-2-7b-chat.Q4_K_M.gguf",
     temperature=0.5,
@@ -50,4 +73,3 @@ chat = LLMChain(
 while True:
     question = input()
     chat({"question": question})
-
