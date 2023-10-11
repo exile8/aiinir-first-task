@@ -5,7 +5,10 @@ from langchain.prompts import (
     SystemMessagePromptTemplate,
     HumanMessagePromptTemplate,
 )
-from langchain.chains import LLMChain
+from langchain.chains import (
+    LLMChain,
+    ConversationalRetrievalChain,
+)
 from langchain.memory import ConversationBufferMemory
 from langchain.document_loaders.directory import DirectoryLoader
 from langchain.document_loaders import (
@@ -13,10 +16,11 @@ from langchain.document_loaders import (
     CSVLoader,
 )
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.vectorstores import Chroma
 
 from langchain.callbacks.manager import CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-
 
 # For development
 callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
@@ -34,9 +38,20 @@ text_splitter = RecursiveCharacterTextSplitter(
 
 chunks = text_splitter.split_documents(docs)
 
+model_name = 'all-MiniLM-L6-v2'
+model_kwargs = {'device': 'cpu'}
+encode_kwargs = {'normalize_embeddings': False}
+embedding_model = HuggingFaceEmbeddings(
+    model_name=model_name,
+    model_kwargs=model_kwargs,
+    encode_kwargs=encode_kwargs
+)
+
+vectorstore = Chroma.from_documents(documents=chunks, embedding=embedding_model)
+
 # TODO: Calibrate precision and randomization
 llm = LlamaCpp(
-    model_path="llama-2-7b-chat.Q4_K_M.gguf",
+    model_path='llama-2-7b-chat.Q4_K_M.gguf',
     temperature=0.5,
     max_tokens=2000,
     top_p=1,
@@ -47,27 +62,27 @@ llm = LlamaCpp(
 prompt = ChatPromptTemplate(
     messages=[
         SystemMessagePromptTemplate.from_template(
-            "You are a helpful, respectful and honest assistant. \
-            Always answer as helpfully as possible, while being safe. \
-            Your answers should not include any harmful, unethical, \
-            racist, sexist, toxic, dangerous, or illegal content. \
-            Please ensure that your responses are socially unbiased and positive in nature. \
-            If a question does not make any sense, or is not factually coherent, \
-            explain why instead of answering something not correct. \
-            If you don't know the answer to a question, please don't share false information."
-        ),
+           "You are a helpful, respectful and honest assistant."
+            "Always answer as helpfully as possible, while being safe."
+            "Your answers should not include any harmful, unethical,"
+            "racist, sexist, toxic, dangerous, or illegal content."
+            "Please ensure that your responses are socially unbiased and positive in nature."
+            "If a question does not make any sense, or is not factually coherent,"
+            "explain why instead of answering something not correct."
+            "If you don't know the answer to a question, please don't share false information."
+        ,),
         MessagesPlaceholder(variable_name="chat_history"),
         HumanMessagePromptTemplate.from_template("{question}")
     ]
 )
 
 memory = ConversationBufferMemory(memory_key="chat_history",return_messages=True)
+retriever = vectorstore.as_retriever()
 
-chat = LLMChain(
+chat = ChatVectorDBChain(
     llm=llm,
-    prompt=prompt,
-    verbose=True,
-    memory=memory
+    retriever=retriever,
+    chain_type_kwargs={"prompt": prompt, "memory": memory},
 )
 
 while True:
