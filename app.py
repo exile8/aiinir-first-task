@@ -32,8 +32,8 @@ csv_loader = DirectoryLoader('tinkoff-terms', glob='**/*.csv', loader_cls=CSVLoa
 docs = pdf_loader.load() + csv_loader.load()
 
 text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1000,
-    chunk_overlap=200
+    chunk_size=200,
+    chunk_overlap=20
 )
 
 chunks = text_splitter.split_documents(docs)
@@ -70,21 +70,24 @@ prompt = ChatPromptTemplate(
             "If a question does not make any sense, or is not factually coherent,"
             "explain why instead of answering something not correct."
             "If you don't know the answer to a question, please don't share false information."
+            "To answer questions, use info from {rel_docs}. Only answer in Russian"
         ,),
         MessagesPlaceholder(variable_name="chat_history"),
-        HumanMessagePromptTemplate.from_template("{question}")
+        HumanMessagePromptTemplate.from_template("{question}"),
     ]
 )
 
 memory = ConversationBufferMemory(memory_key="chat_history",return_messages=True)
-retriever = vectorstore.as_retriever()
+# retriever = vectorstore.as_retriever()
 
-chat = ChatVectorDBChain(
+chat = LLMChain(
     llm=llm,
-    retriever=retriever,
-    chain_type_kwargs={"prompt": prompt, "memory": memory},
+    prompt=prompt,
+    memory=memory,
+    verbose=True
 )
 
 while True:
     question = input()
-    chat({"question": question})
+    rel_docs = vectorstore.similarity_search(question)
+    chat({"question": question, 'rel_docs': rel_docs})
