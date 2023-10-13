@@ -54,15 +54,16 @@ llm = LlamaCpp(
 
 # TODO: experiment with prompt language
 prompt = PromptTemplate(
-    template= """Ты вежливый ассистент, который отвечает на вопросы пользователя кратко и честно,
-    в соответствии с Context
-    Пользователь задает вопросы о банке Тинькофф и его услугах
-    Если не знаешь ответ на вопрос, то сообщи об этом, не пытайся придумать ответ.
-    Если вопрос бессмысленный, вежливо сообщи об этом пользователю
-    Язык: русский.
-    Вопрос: {question}
+    template= """You are a helpful and honest chatbot-assistant.
+    You are having a conversation with a human.
+    To answer questions, refer to context.
+    To hold conversation, refer to chat history.
+    Answer only in Russian.
+    If you don't know the answer, just say you don't know. Don't make up an answer.
+    Chat History: {chat_history}
     Context: {context}
-    Chat History: {chat_history}""",
+    Question: {question}
+    Answer: """,
     input_variables=['question', 'context', 'chat_history']
 )
 
