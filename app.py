@@ -1,21 +1,13 @@
 from langchain.llms import LlamaCpp
-from langchain.prompts import (
-    ChatPromptTemplate,
-    MessagesPlaceholder,
-    SystemMessagePromptTemplate,
-    HumanMessagePromptTemplate,
-)
-from langchain.chains import (
-    LLMChain,
-    ConversationalRetrievalChain,
-)
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
 from langchain.memory import ConversationBufferMemory
 from langchain.document_loaders.directory import DirectoryLoader
 from langchain.document_loaders import (
-    PyPDFLoader,
+    UnstructuredPDFLoader,
     CSVLoader,
 )
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.text_splitter import CharacterTextSplitter
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import Chroma
 
@@ -25,20 +17,20 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 # For development
 callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
 
-# TODO: implement docs
-pdf_loader = DirectoryLoader('tinkoff-terms', glob='**/*.pdf', loader_cls=PyPDFLoader)
+pdf_loader = DirectoryLoader('tinkoff-terms', glob='**/*.pdf', loader_cls=UnstructuredPDFLoader)
 csv_loader = DirectoryLoader('tinkoff-terms', glob='**/*.csv', loader_cls=CSVLoader)
 
-docs = pdf_loader.load() + csv_loader.load()
+docs = csv_loader.load() + pdf_loader.load()
 
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=200,
-    chunk_overlap=20
+text_splitter = CharacterTextSplitter(
+    chunk_size=500,
+    chunk_overlap=50
 )
 
 chunks = text_splitter.split_documents(docs)
 
-model_name = 'all-MiniLM-L6-v2'
+# TODO: experiment with embeddings model
+model_name = 'multi-qa-distilbert-cos-v1'
 model_kwargs = {'device': 'cpu'}
 encode_kwargs = {'normalize_embeddings': False}
 embedding_model = HuggingFaceEmbeddings(
@@ -52,33 +44,30 @@ vectorstore = Chroma.from_documents(documents=chunks, embedding=embedding_model)
 # TODO: Calibrate precision and randomization
 llm = LlamaCpp(
     model_path='llama-2-7b-chat.Q4_K_M.gguf',
-    temperature=0.5,
+    temperature=0.75,
     max_tokens=2000,
     top_p=1,
+    n_ctx=1024,
     callback_manager=callback_manager, 
-    verbose=True, # Verbose is required to pass to the callback manager
+    verbose=True,
 )
 
-prompt = ChatPromptTemplate(
-    messages=[
-        SystemMessagePromptTemplate.from_template(
-           "You are a helpful, respectful and honest assistant."
-            "Always answer as helpfully as possible, while being safe."
-            "Your answers should not include any harmful, unethical,"
-            "racist, sexist, toxic, dangerous, or illegal content."
-            "Please ensure that your responses are socially unbiased and positive in nature."
-            "If a question does not make any sense, or is not factually coherent,"
-            "explain why instead of answering something not correct."
-            "If you don't know the answer to a question, please don't share false information."
-            "To answer questions, use info from {rel_docs}. Only answer in Russian"
-        ,),
-        MessagesPlaceholder(variable_name="chat_history"),
-        HumanMessagePromptTemplate.from_template("{question}"),
-    ]
+# TODO: experiment with prompt language
+prompt = PromptTemplate(
+    template= """Ты вежливый ассистент, который отвечает на вопросы пользователя кратко и честно,
+    в соответствии с Context
+    Пользователь задает вопросы о банке Тинькофф и его услугах
+    Если не знаешь ответ на вопрос, то сообщи об этом, не пытайся придумать ответ.
+    Если вопрос бессмысленный, вежливо сообщи об этом пользователю
+    Язык: русский.
+    Вопрос: {question}
+    Context: {context}
+    Chat History: {chat_history}""",
+    input_variables=['question', 'context', 'chat_history']
 )
 
-memory = ConversationBufferMemory(memory_key="chat_history",return_messages=True)
-# retriever = vectorstore.as_retriever()
+
+memory = ConversationBufferMemory(memory_key="chat_history", input_key='question', return_messages=True)
 
 chat = LLMChain(
     llm=llm,
@@ -89,5 +78,5 @@ chat = LLMChain(
 
 while True:
     question = input()
-    rel_docs = vectorstore.similarity_search(question)
-    chat({"question": question, 'rel_docs': rel_docs})
+    context = vectorstore.max_marginal_relevance_search(question)
+    chat.predict(question=question, context=context)
