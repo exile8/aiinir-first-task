@@ -14,6 +14,8 @@ from langchain.vectorstores import Chroma
 from langchain.callbacks.manager import CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
+from fastapi import FastAPI
+
 # For development
 callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
 
@@ -54,7 +56,7 @@ llm = LlamaCpp(
 
 # TODO: experiment with prompt language
 prompt = PromptTemplate(
-    template= """You are a helpful and honest chatbot-assistant.
+    template= '''You are a helpful and honest chatbot-assistant.
     You are having a conversation with a human.
     To answer questions, refer to context.
     To hold conversation, refer to chat history.
@@ -63,12 +65,12 @@ prompt = PromptTemplate(
     Chat History: {chat_history}
     Context: {context}
     Question: {question}
-    Answer: """,
+    Answer: ''',
     input_variables=['question', 'context', 'chat_history']
 )
 
 
-memory = ConversationBufferMemory(memory_key="chat_history", input_key='question', return_messages=True)
+memory = ConversationBufferMemory(memory_key='chat_history', input_key='question', return_messages=True)
 
 chat = LLMChain(
     llm=llm,
@@ -77,7 +79,11 @@ chat = LLMChain(
     verbose=True
 )
 
-while True:
-    question = input()
-    context = vectorstore.max_marginal_relevance_search(question)
-    chat.predict(question=question, context=context)
+app = FastAPI()
+
+@app.post('/message')
+def message(user_id : str, message : str):
+    context = vectorstore.max_marginal_relevance_search(message)
+    answer = chat.predict(question=message, context=context)
+
+    return {'user_id': user_id, 'answer': answer}
