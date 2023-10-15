@@ -10,4 +10,4 @@ RUN pip install --no-cache-dir --upgrade --no-deps -r /app/requirements-no-deps.
 
 EXPOSE 8080
 
-CMD /app/script.sh
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
