@@ -19,6 +19,10 @@ from pathlib import Path
 import json
 from pydantic import BaseModel
 
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+
 # For development
 callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
 
@@ -98,7 +102,7 @@ def message(message: Message):
             input_key='question',
             k=window_len,
             return_messages=True,
-            chat_memory=RedisChatMessageHistory(message.user_id)
+            chat_memory=RedisChatMessageHistory(message.user_id, url='redis://redis:6379')
         )
     )
 
@@ -109,7 +113,7 @@ def message(message: Message):
         verbose=True
     )
 
-    context = vectorstore.similarity_search_with_relevance_scores(message.message)
+    context = vectorstore.max_marginal_relevance_search(message.message)
     answer = chat.predict(question=message.message, context=context)
 
     if len(memory.chat_memory.messages) > chat_limit * 2:
