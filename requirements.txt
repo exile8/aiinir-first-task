@@ -1,6 +1,16 @@
+nltk==3.8.1
+scikit-learn==1.3.1
+sentencepiece==0.1.99
+transformers==4.34.0
+llama-cpp-python
+pysqlite3-binary
 fastapi==0.103.2
 uvicorn==0.23.2
 langchain==0.0.310
 chromadb==0.4.14
 redis==4.6.0
 pypdf==3.16.4
+-f https://download.pytorch.org/whl/torch_stable.html 
+torch==2.1.0+cpu 
+-f https://download.pytorch.org/whl/torch_stable.html
+torchvision==0.16.0+cpu
